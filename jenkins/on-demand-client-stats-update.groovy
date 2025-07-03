@@ -2,91 +2,92 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'CLIENT', choices: [
-            'MFM',
-            'PHL',
-            'SEQ'
-        ], description: 'Select a client to update stats for')
+        choice(name: 'CLIENT_NAME', choices: [
+            'DCU', 'HB Retail', 'HB Wholesale', 'HB Wholesale Replica',
+            'KIND Retail', 'KIND Retail Replica', 'KIND Wholesale', 'Lendage',
+            'MFM', 'MFM Replica', 'MFM Correspondent', 'MIG', 'NASB', 'PHL', 'PRIME',
+            'SEQ', 'Westerra', 'SCU', 'FCM', 'Chevron'
+        ], description: 'Select client for stats update')
 
-        password(name: 'MFM_DB_PASS', defaultValue: '', description: 'Password for MFM')
-        password(name: 'PHL_DB_PASS', defaultValue: '', description: 'Password for PHL')
-        password(name: 'SEQ_DB_PASS', defaultValue: '', description: 'Password for SEQ')
-
-        password(name: 'SLACK_SECRET', defaultValue: '', description: 'Slack webhook URL')
+        password(name: 'DCU_DB_PASS', defaultValue: '', description: 'DCU DB password')
+        password(name: 'HB_RETAIL_DB_PASS', defaultValue: '', description: 'HB Retail password')
+        password(name: 'HB_WHOLESALE_DB_PASS', defaultValue: '', description: 'HB Wholesale password')
+        password(name: 'HB_WHOLESALE_REPL_DB_PASS', defaultValue: '', description: 'HB Wholesale Replica password')
+        password(name: 'KIND_RETAIL_DB_PASS', defaultValue: '', description: 'KIND Retail password')
+        password(name: 'KIND_RETAIL_REPL_DB_PASS', defaultValue: '', description: 'KIND Retail Replica password')
+        password(name: 'KIND_WHOLESALE_DB_PASS', defaultValue: '', description: 'KIND Wholesale password')
+        password(name: 'LENDAGE_DB_PASS', defaultValue: '', description: 'Lendage password')
+        password(name: 'MFM_DB_PASS', defaultValue: '', description: 'MFM password')
+        password(name: 'MFM_REPL_DB_PASS', defaultValue: '', description: 'MFM Replica password')
+        password(name: 'MFMCORR_DB_PASS', defaultValue: '', description: 'MFM Correspondent password')
+        password(name: 'MIG_DB_PASS', defaultValue: '', description: 'MIG password')
+        password(name: 'NASB_DB_PASS', defaultValue: '', description: 'NASB password')
+        password(name: 'PHL_DB_PASS', defaultValue: '', description: 'PHL password')
+        password(name: 'PRIME_DB_PASS', defaultValue: '', description: 'PRIME password')
+        password(name: 'SEQ_DB_PASS', defaultValue: '', description: 'SEQ password')
+        password(name: 'WESTERRA_DB_PASS', defaultValue: '', description: 'Westerra password')
+        password(name: 'SCU_DB_PASS', defaultValue: '', description: 'SCU password')
+        password(name: 'FCM_DB_PASS', defaultValue: '', description: 'FCM password')
+        password(name: 'CHEVRON_DB_PASS', defaultValue: '', description: 'Chevron password')
+        password(name: 'SLACK_SECRET', defaultValue: '', description: 'Slack Webhook URL')
     }
 
     environment {
-        SLACK_WEBHOOK_URL = params.SLACK_SECRET
+        SLACK_WEBHOOK_URL = "${params.SLACK_SECRET}"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git credentialsId: 'bluesage github',
-                    url: 'https://github.com/BlueSageSolutions/db-maintenance.git',
-                    branch: 'main'
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                sh 'pip install --upgrade pymysql requests'
-            }
-        }
-
-        stage('Map Client Config') {
-            steps {
-                script {
-                    def config = [
-                        'MFM': [
-                            host: 'mfm-prod.cluster-cpewz1juqrts.us-east-1.rds.amazonaws.com',
-                            user: 'mfm_prod_admin',
-                            pass: params.MFM_DB_PASS
-                        ],
-                        'PHL': [
-                            host: 'phl-prod.cluster-cwi6aysujgze.us-east-1.rds.amazonaws.com',
-                            user: 'phl_prod_admin',
-                            pass: params.PHL_DB_PASS
-                        ],
-                        'SEQ': [
-                            host: 'prd-seq-cluster.cluster-cm711hj0bd1j.us-east-1.rds.amazonaws.com',
-                            user: 'prd_seq_admin',
-                            pass: params.SEQ_DB_PASS
-                        ]
-                    ]
-
-                    if (!config.containsKey(params.CLIENT)) {
-                        error("Unknown client: ${params.CLIENT}")
-                    }
-
-                    def selected = config[params.CLIENT]
-                    env.CLIENT_HOST = selected.host
-                    env.CLIENT_USER = selected.user
-                    env.CLIENT_PASS = selected.pass
-                }
+                git url: 'https://github.com/BlueSageSolutions/db-maintenance.git'
             }
         }
 
         stage('Run Stats Update') {
             steps {
-                sh '''
-                echo "Running ANALYZE TABLE for $CLIENT"
-                python update_table_stats.py \
-                    --client "$CLIENT" \
-                    --host "$CLIENT_HOST" \
-                    --user "$CLIENT_USER" \
-                    --password "$CLIENT_PASS"
-                '''
+                script {
+                    def config = [
+                        'DCU':               [host: 'dcu-prod.cluster-cdv1igygg71v.us-east-1.rds.amazonaws.com', user: 'dcu_prod_admin', pass: params.DCU_DB_PASS],
+                        'HB Retail':         [host: 'hb-prod.cluster-cbt5jbn4bezy.us-east-1.rds.amazonaws.com', user: 'hb_prod_admin', pass: params.HB_RETAIL_DB_PASS],
+                        'HB Wholesale':      [host: 'hb-prod.cluster-cbt5jbn4bezy.us-east-1.rds.amazonaws.com', user: 'hb_prod_admin', pass: params.HB_WHOLESALE_DB_PASS],
+                        'HB Wholesale Replica': [host: 'hb-prod.cluster-ro-cbt5jbn4bezy.us-east-1.rds.amazonaws.com', user: 'hb_prod_admin', pass: params.HB_WHOLESALE_REPL_DB_PASS],
+                        'KIND Retail':       [host: 'kindretail-prod.cluster-cyflzub0ncfc.us-east-1.rds.amazonaws.com', user: 'kindretail_admin', pass: params.KIND_RETAIL_DB_PASS],
+                        'KIND Retail Replica':[host: 'kindretail-prod.cluster-ro-cyflzub0ncfc.us-east-1.rds.amazonaws.com', user: 'kindretail_admin', pass: params.KIND_RETAIL_REPL_DB_PASS],
+                        'KIND Wholesale':    [host: 'kind-prod.cluster-cklccemav8xr.us-east-1.rds.amazonaws.com', user: 'kind_prod_admin', pass: params.KIND_WHOLESALE_DB_PASS],
+                        'Lendage':           [host: 'lendage-prod.cluster-clnsi6frxbws.us-east-1.rds.amazonaws.com', user: 'lend_prod_admin', pass: params.LENDAGE_DB_PASS],
+                        'MFM':               [host: 'mfm-prod.cluster-cpewz1juqrts.us-east-1.rds.amazonaws.com', user: 'mfm_prod_admin', pass: params.MFM_DB_PASS],
+                        'MFM Replica':       [host: 'mfm-prod.cluster-ro-cpewz1juqrts.us-east-1.rds.amazonaws.com', user: 'mfm_prod_admin', pass: params.MFM_REPL_DB_PASS],
+                        'MFM Correspondent': [host: 'mfmcorr-prod.cluster-cphgt2qz1ifr.us-east-1.rds.amazonaws.com', user: 'mfmcorr_prod_adm', pass: params.MFMCORR_DB_PASS],
+                        'MIG':               [host: 'mig-prod.cluster-c6fysriq3ynz.us-east-1.rds.amazonaws.com', user: 'mig_prod_admin', pass: params.MIG_DB_PASS],
+                        'NASB':              [host: 'nasb-prod.cluster-c2qozf0lefhk.us-east-1.rds.amazonaws.com', user: 'nasb_prod_admin', pass: params.NASB_DB_PASS],
+                        'PHL':               [host: 'phl-prod.cluster-cwi6aysujgze.us-east-1.rds.amazonaws.com', user: 'phl_prod_admin', pass: params.PHL_DB_PASS],
+                        'PRIME':             [host: 'prime-prod.cluster-cp1iltlyjptb.us-east-1.rds.amazonaws.com', user: 'prime_prod_admin', pass: params.PRIME_DB_PASS],
+                        'SEQ':               [host: 'prd-seq-cluster.cluster-cm711hj0bd1j.us-east-1.rds.amazonaws.com', user: 'prd_seq_admin', pass: params.SEQ_DB_PASS],
+                        'Westerra':          [host: 'westerra-prod.cluster-cz17s45vhtc5.us-east-1.rds.amazonaws.com', user: 'west_prod_admin', pass: params.WESTERRA_DB_PASS],
+                        'SCU':               [host: 'scu-prod.cluster-cibmycatlytx.us-east-1.rds.amazonaws.com', user: 'scu_prod_admin', pass: params.SCU_DB_PASS],
+                        'FCM':               [host: 'fcm-prod.cluster-cpk5blsugybe.us-east-1.rds.amazonaws.com', user: 'fcm_prod_admin', pass: params.FCM_DB_PASS],
+                        'Chevron':           [host: 'cfcu-prod.cluster-cfghoc9qnkn4.us-east-1.rds.amazonaws.com', user: 'cfcu_prod_admin', pass: params.CHEVRON_DB_PASS]
+                    ]
+
+                    def client = config[params.CLIENT_NAME]
+                    sh """
+                        pip3 install pymysql requests
+                        python3 scripts/update_stats.py \\
+                            --host=${client.host} \\
+                            --user=${client.user} \\
+                            --password='${client.pass}'
+                    """
+                }
             }
         }
     }
 
     post {
-        success {
-            echo "✅ Stats update for ${params.CLIENT} succeeded."
-        }
         failure {
-            echo "❌ Stats update for ${params.CLIENT} failed."
+            echo "❌ Stats update for ${params.CLIENT_NAME} failed."
+        }
+        success {
+            echo "✅ Stats update for ${params.CLIENT_NAME} succeeded."
         }
     }
 }
