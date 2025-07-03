@@ -24,7 +24,7 @@ CLIENTS = [
     ("MFM", "mfm-prod.cluster-cpewz1juqrts.us-east-1.rds.amazonaws.com", "mfm_prod_admin", os.getenv("DB_PASS_MFM")),
     ("MFM Replica", "mfm-prod.cluster-ro-cpewz1juqrts.us-east-1.rds.amazonaws.com", "mfm_prod_admin", os.getenv("DB_PASS_MFM")),
     ("MFM Correspondent", "mfmcorr-prod.cluster-cphgt2qz1ifr.us-east-1.rds.amazonaws.com", "mfmcorr_prod_adm", os.getenv("DB_PASS_MFMCORR")),
-    # Add more clients as needed
+=
 ]
 
 @contextmanager
