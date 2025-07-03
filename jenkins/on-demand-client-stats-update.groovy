@@ -32,9 +32,25 @@ pipeline {
     }
 
     stages {
+        stage('Verify Setup') {
+            steps {
+                script {
+                    if (!params.CLIENT) {
+                        error("Client selection is required")
+                    }
+                    if (!fileExists('update_table_stats.py')) {
+                        error("update_table_stats.py not found in workspace root")
+                    }
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
-                git credentialsId: 'github-token', url: 'https://github.com/BlueSageSolutions/db-maintenance.git'
+                git(
+                    url: 'https://github.com/BlueSageSolutions/db-maintenance.git',
+                    credentialsId: 'a88a93e30c147197b3f311bb3030fd85d7e097cd' // Use your actual credential ID
+                )
             }
         }
 
@@ -65,24 +81,37 @@ pipeline {
                     ]
 
                     def clientConfig = config[params.CLIENT]
-                    docker.image('python:3.11-slim').inside {
+                    
+                    docker.image('python:3.11-slim').inside('-u 0:0') {
                         sh """
                             pip install --no-cache-dir --progress-bar off pymysql requests
                             python3 update_table_stats.py "${clientConfig.host}" "${clientConfig.user}" "${clientConfig.pass}"
                         """
                     }
-
                 }
             }
         }
     }
 
     post {
-        failure {
-            echo "❌ Stats update for ${params.CLIENT} failed."
+        always {
+            script {
+                echo "Cleaning up workspace..."
+            }
         }
         success {
-            echo "✅ Stats update for ${params.CLIENT} completed successfully."
+            script {
+                echo "✅ Stats update for ${params.CLIENT} completed successfully."
+                // Uncomment to add Slack notification
+                // slackSend(color: "good", message: "✅ Stats update for ${params.CLIENT} completed successfully.")
+            }
+        }
+        failure {
+            script {
+                echo "❌ Stats update for ${params.CLIENT} failed."
+                // Uncomment to add Slack notification
+                // slackSend(color: "danger", message: "❌ Stats update for ${params.CLIENT} failed.")
+            }
         }
     }
 }
