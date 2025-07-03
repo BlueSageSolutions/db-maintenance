@@ -65,10 +65,10 @@ pipeline {
                     ]
 
                     def clientConfig = config[params.CLIENT]
-                    docker.image('python:3.11-slim').inside('-u 0:0') {
+                    docker.image('python:3.11-slim').inside {
                         sh """
                             pip install --no-cache-dir --progress-bar off pymysql requests
-                            python3 scripts/update_stats.py "${clientConfig.host}" "${clientConfig.user}" "${clientConfig.pass}"
+                            python3 update_table_stats.py "${clientConfig.host}" "${clientConfig.user}" "${clientConfig.pass}"
                         """
                     }
 
