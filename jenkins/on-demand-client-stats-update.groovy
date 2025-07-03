@@ -14,6 +14,7 @@ pipeline {
 
     environment {
         SLACK_WEBHOOK_URL = "${params.SLACK_WEBHOOK}"
+        AWS_REGION = "us-east-1"
     }
 
     stages {
@@ -34,38 +35,57 @@ pipeline {
             steps {
                 script {
                     def clientCredentials = [
-                        'DCU': [credentialId: 'DCU_DB_PASS', host: 'dcu-prod.cluster-cdv1igygg71v.us-east-1.rds.amazonaws.com', user: 'dcu_prod_admin'],
-                        'HB Retail': [credentialId: 'HB_DB_PASS', host: 'hb-prod.cluster-cbt5jbn4bezy.us-east-1.rds.amazonaws.com', user: 'hb_prod_admin'],
-                        'HB Wholesale': [credentialId: 'HB_DB_PASS', host: 'hb-prod.cluster-cbt5jbn4bezy.us-east-1.rds.amazonaws.com', user: 'hb_prod_admin'],
-                        'HB Wholesale Replica': [credentialId: 'HB_DB_PASS', host: 'hb-prod.cluster-ro-cbt5jbn4bezy.us-east-1.rds.amazonaws.com', user: 'hb_prod_admin'],
-                        'KIND Retail': [credentialId: 'KIND_DB_PASS', host: 'kindretail-prod.cluster-cyflzub0ncfc.us-east-1.rds.amazonaws.com', user: 'kindretail_admin'],
-                        'KIND Retail Replica': [credentialId: 'KIND_DB_PASS', host: 'kindretail-prod.cluster-ro-cyflzub0ncfc.us-east-1.rds.amazonaws.com', user: 'kindretail_admin'],
-                        'KIND Wholesale': [credentialId: 'KIND_DB_PASS', host: 'kind-prod.cluster-cklccemav8xr.us-east-1.rds.amazonaws.com', user: 'kind_prod_admin'],
-                        'Lendage': [credentialId: 'LENDAGE_DB_PASS', host: 'lendage-prod.cluster-clnsi6frxbws.us-east-1.rds.amazonaws.com', user: 'lend_prod_admin'],
-                        'MFM': [credentialId: 'MFM_DB_PASS', host: 'mfm-prod.cluster-cpewz1juqrts.us-east-1.rds.amazonaws.com', user: 'mfm_prod_admin'],
-                        'MFM Replica': [credentialId: 'MFM_DB_PASS', host: 'mfm-prod.cluster-ro-cpewz1juqrts.us-east-1.rds.amazonaws.com', user: 'mfm_prod_admin'],
-                        'MFM Correspondent': [credentialId: 'MFM_DB_PASS', host: 'mfmcorr-prod.cluster-cphgt2qz1ifr.us-east-1.rds.amazonaws.com', user: 'mfmcorr_prod_adm'],
-                        'MIG': [credentialId: 'MIG_DB_PASS', host: 'mig-prod.cluster-c6fysriq3ynz.us-east-1.rds.amazonaws.com', user: 'mig_prod_admin'],
-                        'NASB': [credentialId: 'NASB_DB_PASS', host: 'nasb-prod.cluster-c2qozf0lefhk.us-east-1.rds.amazonaws.com', user: 'nasb_prod_admin'],
-                        'PHL': [credentialId: 'PHL_DB_PASS', host: 'phl-prod.cluster-cwi6aysujgze.us-east-1.rds.amazonaws.com', user: 'phl_prod_admin'],
-                        'PRIME': [credentialId: 'PRIME_DB_PASS', host: 'prime-prod.cluster-cp1iltlyjptb.us-east-1.rds.amazonaws.com', user: 'prime_prod_admin'],
-                        'SEQ': [credentialId: 'SEQ_DB_PASS', host: 'prd-seq-cluster.cluster-cm711hj0bd1j.us-east-1.rds.amazonaws.com', user: 'prd_seq_admin'],
-                        'Westerra': [credentialId: 'WESTERRA_DB_PASS', host: 'westerra-prod.cluster-cz17s45vhtc5.us-east-1.rds.amazonaws.com', user: 'west_prod_admin'],
-                        'SCU': [credentialId: 'SCU_DB_PASS', host: 'scu-prod.cluster-cibmycatlytx.us-east-1.rds.amazonaws.com', user: 'scu_prod_admin'],
-                        'FCM': [credentialId: 'FCM_DB_PASS', host: 'fcm-prod.cluster-cpk5blsugybe.us-east-1.rds.amazonaws.com', user: 'fcm_prod_admin'],
-                        'Chevron': [credentialId: 'CHEVRON_DB_PASS', host: 'cfcu-prod.cluster-cfghoc9qnkn4.us-east-1.rds.amazonaws.com', user: 'cfcu_prod_admin']
+                        'MFM': [
+                            secretArn: 'arn:aws:secretsmanager:us-east-1:751218182449:secret:MFM_Retail_DB-0ATExQ',
+                            host: 'mfm-prod.cluster-cpewz1juqrts.us-east-1.rds.amazonaws.com'
+                        ],
+                        'MFM Replica': [
+                            secretArn: 'arn:aws:secretsmanager:us-east-1:751218182449:secret:MFM_Retail_DB-0ATExQ',
+                            host: 'mfm-prod.cluster-ro-cpewz1juqrts.us-east-1.rds.amazonaws.com'
+                        ],
+                        // Add other clients with their respective secret ARNs
                     ]
 
                     def config = clientCredentials[params.CLIENT]
+                    if (!config) {
+                        error("Configuration not found for client: ${params.CLIENT}")
+                    }
+
+                    // Get credentials from AWS Secrets Manager securely
+                    def secretJson = sh(
+                        script: """
+                            aws secretsmanager get-secret-value \
+                              --secret-id ${config.secretArn} \
+                              --region ${AWS_REGION} \
+                              --query SecretString \
+                              --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    // Parse the JSON secret
+                    def secret = readJSON text: secretJson
                     
-                    withCredentials([string(credentialsId: config.credentialId, variable: 'DB_PASSWORD')]) {
-                        docker.image('python:3.11-slim').inside('-u 0:0') {
+                    // Mask sensitive values in logs
+                    wrap([$class: 'MaskPasswordsBuildWrapper']) {
+                        env.DB_PASSWORD = secret.password
+                        env.DB_USER = secret.username
+                    }
+
+                    docker.image('python:3.11-slim').inside('-u 0:0') {
+                        withEnv([
+                            "CLIENT=${params.CLIENT}",
+                            "DB_HOST=${config.host}",
+                            "DB_USER=${secret.username}",
+                            "DB_PASSWORD=${secret.password}"
+                        ]) {
                             sh '''
+                                # This script block ensures password isn't exposed in command line
                                 pip install --no-cache-dir --progress-bar off pymysql requests
                                 python3 update_table_stats.py \
-                                    --client ${CLIENT} \
-                                    --host ''' + config.host + ''' \
-                                    --user ''' + config.user + ''' \
+                                    --client "$CLIENT" \
+                                    --host "$DB_HOST" \
+                                    --user "$DB_USER" \
                                     --password "$DB_PASSWORD"
                             '''
                         }
@@ -78,6 +98,9 @@ pipeline {
     post {
         always {
             script {
+                // Clean up environment variables containing secrets
+                env.DB_PASSWORD = null
+                env.DB_USER = null
                 echo "Cleaning up workspace..."
             }
         }
