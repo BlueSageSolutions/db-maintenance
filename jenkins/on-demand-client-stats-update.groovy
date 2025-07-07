@@ -15,6 +15,7 @@ pipeline {
     environment {
         SLACK_WEBHOOK_URL = "${params.SLACK_WEBHOOK}"
         AWS_REGION = "us-east-1"
+        ROLE_ARN = "arn:aws:iam::751218182449:role/bss_jenkins_db"
     }
 
     stages {
@@ -43,7 +44,7 @@ pipeline {
                             secretArn: 'arn:aws:secretsmanager:us-east-1:751218182449:secret:MFM_Retail_DB-0ATExQ',
                             host: 'mfm-prod.cluster-ro-cpewz1juqrts.us-east-1.rds.amazonaws.com'
                         ],
-                        // Add other clients with their respective secret ARNs
+                        // Add other clients here...
                     ]
 
                     def config = clientCredentials[params.CLIENT]
@@ -51,9 +52,26 @@ pipeline {
                         error("Configuration not found for client: ${params.CLIENT}")
                     }
 
-                    // Get credentials from AWS Secrets Manager securely
+                    // Step 1: Assume cross-account role
+                    def credsJson = sh(
+                        script: """
+                            aws sts assume-role \
+                              --role-arn ${ROLE_ARN} \
+                              --role-session-name JenkinsSession-${params.CLIENT} \
+                              --region ${AWS_REGION} \
+                              --query 'Credentials' \
+                              --output json
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    def creds = readJSON text: credsJson
+
+                    // Step 2: Use temp credentials to retrieve the secret
                     def secretJson = sh(
                         script: """
+                            AWS_ACCESS_KEY_ID=${creds.AccessKeyId} \
+                            AWS_SECRET_ACCESS_KEY=${creds.SecretAccessKey} \
+                            AWS_SESSION_TOKEN=${creds.SessionToken} \
                             aws secretsmanager get-secret-value \
                               --secret-id ${config.secretArn} \
                               --region ${AWS_REGION} \
@@ -62,11 +80,9 @@ pipeline {
                         """,
                         returnStdout: true
                     ).trim()
-
-                    // Parse the JSON secret
                     def secret = readJSON text: secretJson
-                    
-                    // Mask sensitive values in logs
+
+                    // Step 3: Mask and inject DB credentials
                     wrap([$class: 'MaskPasswordsBuildWrapper']) {
                         env.DB_PASSWORD = secret.password
                         env.DB_USER = secret.username
@@ -80,7 +96,6 @@ pipeline {
                             "DB_PASSWORD=${secret.password}"
                         ]) {
                             sh '''
-                                # This script block ensures password isn't exposed in command line
                                 pip install --no-cache-dir --progress-bar off pymysql requests
                                 python3 update_table_stats.py \
                                     --client "$CLIENT" \
@@ -98,7 +113,6 @@ pipeline {
     post {
         always {
             script {
-                // Clean up environment variables containing secrets
                 env.DB_PASSWORD = null
                 env.DB_USER = null
                 echo "Cleaning up workspace..."
