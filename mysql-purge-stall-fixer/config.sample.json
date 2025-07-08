@@ -1,0 +1,7 @@
+{
+    "host": "your-rds-endpoint",
+    "user": "admin_user",
+    "password": "your_password",
+    "database": "information_schema"
+  }
+  
