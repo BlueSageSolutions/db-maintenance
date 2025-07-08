@@ -50,7 +50,7 @@ Create a file called `config.json` in the root directory with the following cont
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/BlueSageSolutions/db-maintenance/mysql-purge-stall-fixer.git
+   git clone https://github.com/BlueSageSolutions/db-maintenance.git
    cd mysql-purge-stall-fixer
    ```
 
